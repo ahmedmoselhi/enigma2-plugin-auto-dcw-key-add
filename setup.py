@@ -4,7 +4,7 @@ import setup_translate
 
 setup(
 	name='enigma2-plugin-extensions-auto-dcw-key-add',
-	version='1.0.8',
+	version='1.0.9',
 	author='Youchie / ahmedmoselhi',
 	author_email='ahmedmoselhi55@gmail.com',
 	package_dir={'Extensions.DCWKeyAdd': 'src'},
