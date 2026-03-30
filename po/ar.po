@@ -1,13 +1,13 @@
 # Translation file for DCWKeyAdd Plugin.
-# Copyright (C) 2025 SmartCam Team [cite: 8]
-# This file is distributed under the same license as the DCWKeyAdd package. [cite: 8]
-# @Youchie <https://t.me/smartcam_team>, 2025. [cite: 9]
+# Copyright (C) 2025 SmartCam Team
+# This file is distributed under the same license as the DCWKeyAdd package.
+# @Youchie <https://t.me/smartcam_team>, 2025.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: 1.0.8\n"
 "POT-Creation-Date: 2026-03-30 13:41+0000\n"
-"PO-Revision-Date: 2026-03-30 13:45+0000\n"
+"PO-Revision-Date: 2026-03-30 14:00+0000\n"
 "Last-Translator: Gemini\n"
 "Language-Team: Arabic\n"
 "Language: ar\n"
@@ -52,13 +52,13 @@ msgid "AGC"
 msgstr "قوة الإشارة"
 
 msgid "Freq: %s | Pol: %s | FEC: %s | SR: %s"
-msgstr "التردد: %s | الاستقطاب: %s | تصحيح الخطأ: %s | معدل الترميز: %s" [cite: 10]
+msgstr "التردد: %s | الاستقطاب: %s | تصحيح الخطأ: %s | معدل الترميز: %s"
 
 msgid "Channel info not available"
 msgstr "معلومات القناة غير متوفرة"
 
 msgid "Update already installed!\nPlease Restart Enigma2 to Complete Update."
-msgstr "التحديث مثبت بالفعل!\nيرجى إعادة تشغيل Enigma2 لإكمال التحديث." [cite: 11]
+msgstr "التحديث مثبت بالفعل!\nيرجى إعادة تشغيل Enigma2 لإكمال التحديث."
 
 msgid "New update available"
 msgstr "يوجد تحديث جديد متاح"
@@ -70,7 +70,7 @@ msgid "Checking channel encryption..."
 msgstr "جارٍ التحقق من تشفير القناة..."
 
 msgid "No active service!\nPlease tune to a channel first."
-msgstr "لا توجد خدمة نشطة!\nيرجى الوقوف على قناة أولاً." [cite: 12]
+msgstr "لا توجد خدمة نشطة!\nيرجى الوقوف على قناة أولاً."
 
 msgid "Could not get service info"
 msgstr "تعذر الحصول على معلومات الخدمة"
@@ -97,13 +97,13 @@ msgid "Enter EXACTLY 16 character BISS Key (0-9,A-F):"
 msgstr "أدخل مفتاح BISS المكون من 16 حرفًا بالضبط (0-9, A-F):"
 
 msgid "Key is too short! (%s/16 chars)\nNeed %s more characters."
-msgstr "المفتاح قصير جدًا! (%s/16 حرفًا)\nتحتاج إلى %s أحرف إضافية." [cite: 13]
+msgstr "المفتاح قصير جدًا! (%s/16 حرفًا)\nتحتاج إلى %s أحرف إضافية."
 
 msgid "Key is too long! (%s/16 chars)\nRemove %s characters."
 msgstr "المفتاح طويل جدًا! (%s/16 حرفًا)\nقم بإزالة %s أحرف."
 
 msgid "Invalid characters!\nOnly 0-9 and A-F are allowed."
-msgstr "أحرف غير صالحة!\nيُسمح فقط بـ 0-9 و A-F." [cite: 14]
+msgstr "أحرف غير صالحة!\nيُسمح فقط بـ 0-9 و A-F."
 
 msgid "Processing BISS key..."
 msgstr "جارٍ معالجة مفتاح BISS..."
