@@ -176,6 +176,7 @@ class DCWKeyAddPlugin(Screen):
         self.log_content = []
         self.log_position = 0
         self.pending_softcam_action = None
+        self.last_logged_biss_signature = None
         self["DCW_Key"] = Pixmap()
         self["DCW_Key"].hide()
 
@@ -304,6 +305,7 @@ class DCWKeyAddPlugin(Screen):
                                     freq_mhz, polarization, fec_str, sr_kbps
                                 )
                             )
+                            self.log_current_service_biss_key(info, channel_name)
                             return
         
         except Exception as e:
@@ -311,6 +313,31 @@ class DCWKeyAddPlugin(Screen):
         
         self["channel_name"].setText("Channel info not available")
         self["channel_details"].setText("")
+
+    def log_current_service_biss_key(self, info, channel_name):
+        try:
+            sid = info.getInfo(iServiceInformation.sSID)
+            vpid = info.getInfo(iServiceInformation.sVideoPID)
+            if sid in [None, -1] or vpid in [None, -1]:
+                return
+
+            sid_part = "{:04X}".format(sid)
+            vpid_part = "{:04X}".format(vpid)
+            existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
+            if not existing_keys:
+                return
+
+            current_key = self.extract_biss_key(existing_keys[0]) or "Unknown"
+            signature = "{}:{}:{}".format(channel_name, sid_part, current_key)
+            if signature == self.last_logged_biss_signature:
+                return
+
+            self.last_logged_biss_signature = signature
+            self.log_message("Channel: {} | Current BISS key: {} (SID {} VPID {})".format(
+                channel_name, current_key, sid_part, vpid_part
+            ))
+        except Exception as e:
+            self.log_message("Error logging current BISS key: {}".format(str(e)))
 
     def auto_check_for_updates(self):
         try:
@@ -515,27 +542,54 @@ class DCWKeyAddPlugin(Screen):
         try:
             service = self.session.nav.getCurrentService()
             info = service and service.info()
+            self.pending_softcam_action = {"mode": "replace"}
             if info:
                 sid = info.getInfo(iServiceInformation.sSID)
                 vpid = info.getInfo(iServiceInformation.sVideoPID)
                 if sid not in [None, -1] and vpid not in [None, -1]:
                     sid_part = "{:04X}".format(sid)
                     vpid_part = "{:04X}".format(vpid)
+                    channel_name = info.getName()
                     existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
                     if existing_keys:
                         current_key = self.extract_biss_key(existing_keys[0])
                         if current_key:
-                            self.log_message("Current BISS key for SID {} VPID {}: {}".format(sid_part, vpid_part, current_key))
+                            self.log_message("Current BISS key for channel {}: {} (SID {} VPID {})".format(
+                                channel_name, current_key, sid_part, vpid_part
+                            ))
                         else:
                             self.log_message("Current BISS entry for SID {} VPID {}: {}".format(sid_part, vpid_part, existing_keys[0]))
+                        self.pending_softcam_action = {"mode": "replace", "sid_part": sid_part, "vpid_part": vpid_part}
+                        self.session.openWithCallback(
+                            self.on_manual_mode_choice,
+                            MessageBox,
+                            "Current channel: {}\nCurrent key: {}\n\n"
+                            "Yes = Update current key\n"
+                            "No = Add new key with OSCam service ID format".format(channel_name, current_key or "Unknown"),
+                            type=MessageBox.TYPE_YESNO,
+                            default=True
+                        )
+                        return
 
-            self.session.openWithCallback(self.keyboard_callback,
-                VirtualKeyBoard,
-                title="Enter EXACTLY 16 character BISS Key (0-9,A-F):",
-                text="")
+            self.open_manual_keyboard()
         except Exception as e:
             self.show_error("Failed to open keyboard: {}".format(str(e)))
             self.log_message("Failed to open keyboard: {}".format(str(e)))
+
+    def on_manual_mode_choice(self, should_replace):
+        if not self.pending_softcam_action:
+            self.pending_softcam_action = {}
+
+        self.pending_softcam_action["mode"] = "replace" if should_replace else "oscam_add"
+        self.open_manual_keyboard()
+
+    def open_manual_keyboard(self):
+        self.session.openWithCallback(
+            self.keyboard_callback,
+            VirtualKeyBoard,
+            title="Enter EXACTLY 16 character BISS Key (0-9,A-F):",
+            text=""
+        )
 
     def keyboard_callback(self, key):
         if key is None:
@@ -655,61 +709,16 @@ class DCWKeyAddPlugin(Screen):
                 current_time
             )
 
-            existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
-            if existing_keys:
-                current_key = self.extract_biss_key(existing_keys[0])
-                self.pending_softcam_action = {
-                    "sid_part": sid_part,
-                    "vpid_part": vpid_part,
-                    "sid_vpid": sid_vpid,
-                    "biss_line": biss_line,
-                    "oscam_line": oscam_line,
-                    "current_key": current_key
-                }
-                self.log_message("Existing BISS key found for service SID {} VPID {}".format(sid_part, vpid_part))
-                if current_key:
-                    self.log_message("Current service key: {}".format(current_key))
-                self.session.openWithCallback(
-                    self.on_existing_biss_choice,
-                    MessageBox,
-                    "An existing BISS key was found for current service.\n\n"
-                    "Current key: {}\n\n"
-                    "Yes = Update current key\n"
-                    "No = Add new key with OSCam service ID format".format(current_key or "Unknown"),
-                    type=MessageBox.TYPE_YESNO,
-                    default=True
-                )
-                return
-
-            self.save_manual_biss_key(sid_part, vpid_part, sid_vpid, biss_line, replace_existing=True)
+            mode = (self.pending_softcam_action or {}).get("mode", "replace")
+            self.pending_softcam_action = None
+            if mode == "oscam_add":
+                self.save_manual_biss_key(sid_part, vpid_part, sid_vpid, oscam_line, replace_existing=False)
+            else:
+                self.save_manual_biss_key(sid_part, vpid_part, sid_vpid, biss_line, replace_existing=True)
 
         except Exception as e:
             self.show_error("Error processing key: {}".format(str(e)))
             self.log_message("Error in keyboard_callback: {}".format(str(e)))
-
-    def on_existing_biss_choice(self, should_replace):
-        if not self.pending_softcam_action:
-            return
-
-        action = self.pending_softcam_action
-        self.pending_softcam_action = None
-
-        if should_replace:
-            self.save_manual_biss_key(
-                action["sid_part"],
-                action["vpid_part"],
-                action["sid_vpid"],
-                action["biss_line"],
-                replace_existing=True
-            )
-        else:
-            self.save_manual_biss_key(
-                action["sid_part"],
-                action["vpid_part"],
-                action["sid_vpid"],
-                action["oscam_line"],
-                replace_existing=False
-            )
 
     def save_manual_biss_key(self, sid_part, vpid_part, sid_vpid, target_line, replace_existing):
         if self.write_softcam(target_line, sid_vpid=sid_vpid, replace_existing=replace_existing):
