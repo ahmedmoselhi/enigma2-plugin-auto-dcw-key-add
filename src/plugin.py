@@ -1,6 +1,6 @@
 #############################################################################
 #  Add Auto DCW Key And ADD Manual BISS Key Plugin for Enigma2 by @Youchie ##
-#  Version: 1.0.8                                                          ##
+#  Version: 1.0.9                                                          ##
 #  Coded by @Youchie SmartCam Tem (c)2025                                  ##
 #  Telegram ID: @Youchie                                                   ##
 #  Telegram Channel: https://t.me/smartcam_team                            ##
@@ -55,11 +55,16 @@ try:
 except ImportError:
     ZIP_SUPPORT = False
 
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 GITHUB_REPO = "smcam/Auto-DCW-Key-ADD"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
 VERSION_FILE = os.path.join(INSTALL_PATH, "version.txt")
+HEX4_FORMAT = "{:04X}"
+
+
+def format_hex4(value):
+    return HEX4_FORMAT.format(value)
 
 class DCWKeyAddPlugin(Screen):
     def getSkin(self):
@@ -175,6 +180,8 @@ class DCWKeyAddPlugin(Screen):
         self["log"] = Label("")
         self.log_content = []
         self.log_position = 0
+        self.pending_softcam_action = None
+        self.last_logged_biss_signature = None
         self["DCW_Key"] = Pixmap()
         self["DCW_Key"].hide()
 
@@ -303,6 +310,7 @@ class DCWKeyAddPlugin(Screen):
                                     freq_mhz, polarization, fec_str, sr_kbps
                                 )
                             )
+                            self.log_current_service_biss_key(info, channel_name)
                             return
         
         except Exception as e:
@@ -310,6 +318,31 @@ class DCWKeyAddPlugin(Screen):
         
         self["channel_name"].setText("Channel info not available")
         self["channel_details"].setText("")
+
+    def log_current_service_biss_key(self, info, channel_name):
+        try:
+            sid = info.getInfo(iServiceInformation.sSID)
+            vpid = info.getInfo(iServiceInformation.sVideoPID)
+            if sid in [None, -1] or vpid in [None, -1]:
+                return
+
+            sid_part = format_hex4(sid)
+            vpid_part = format_hex4(vpid)
+            existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
+            if not existing_keys:
+                return
+
+            current_key = self.extract_biss_key(existing_keys[0]) or "Unknown"
+            signature = "{}:{}:{}".format(channel_name, sid_part, current_key)
+            if signature == self.last_logged_biss_signature:
+                return
+
+            self.last_logged_biss_signature = signature
+            self.log_message("Channel: {} | Current BISS key: {} (SID {} VPID {})".format(
+                channel_name, current_key, sid_part, vpid_part
+            ))
+        except Exception as e:
+            self.log_message("Error logging current BISS key: {}".format(str(e)))
 
     def auto_check_for_updates(self):
         try:
@@ -492,8 +525,8 @@ class DCWKeyAddPlugin(Screen):
                 self.show_error("Could not get SID")
                 return
 
-            caid = "{:04X}".format(caids[0])
-            sid = "{:04X}".format(sid)
+            caid = format_hex4(caids[0])
+            sid = format_hex4(sid)
 
             self["label"].setText("Found encrypted channel\nCAID: {}\nSID: {}".format(caid, sid))
             self.log_message("Found encrypted channel\nCAID: {}\nSID: {}".format(caid, sid))
@@ -512,13 +545,56 @@ class DCWKeyAddPlugin(Screen):
 
     def manual_add(self):
         try:
-            self.session.openWithCallback(self.keyboard_callback,
-                VirtualKeyBoard,
-                title="Enter EXACTLY 16 character BISS Key (0-9,A-F):",
-                text="")
+            service = self.session.nav.getCurrentService()
+            info = service and service.info()
+            self.pending_softcam_action = {"mode": "replace"}
+            if info:
+                sid = info.getInfo(iServiceInformation.sSID)
+                vpid = info.getInfo(iServiceInformation.sVideoPID)
+                if sid not in [None, -1] and vpid not in [None, -1]:
+                    sid_part = format_hex4(sid)
+                    vpid_part = format_hex4(vpid)
+                    channel_name = info.getName()
+                    existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
+                    if existing_keys:
+                        current_key = self.extract_biss_key(existing_keys[0])
+                        if current_key:
+                            self.log_message("Current BISS key for channel {}: {} (SID {} VPID {})".format(
+                                channel_name, current_key, sid_part, vpid_part
+                            ))
+                        else:
+                            self.log_message("Current BISS entry for SID {} VPID {}: {}".format(sid_part, vpid_part, existing_keys[0]))
+                        self.pending_softcam_action = {"mode": "replace", "sid_part": sid_part, "vpid_part": vpid_part}
+                        self.session.openWithCallback(
+                            self.on_manual_mode_choice,
+                            MessageBox,
+                            "Current channel: {}\nCurrent key: {}\n\n"
+                            "Yes = Update current key\n"
+                            "No = Add new key with OSCam service ID format".format(channel_name, current_key or "Unknown"),
+                            type=MessageBox.TYPE_YESNO,
+                            default=True
+                        )
+                        return
+
+            self.open_manual_keyboard()
         except Exception as e:
             self.show_error("Failed to open keyboard: {}".format(str(e)))
             self.log_message("Failed to open keyboard: {}".format(str(e)))
+
+    def on_manual_mode_choice(self, should_replace):
+        if not self.pending_softcam_action:
+            self.pending_softcam_action = {}
+
+        self.pending_softcam_action["mode"] = "replace" if should_replace else "oscam_add"
+        self.open_manual_keyboard()
+
+    def open_manual_keyboard(self):
+        self.session.openWithCallback(
+            self.keyboard_callback,
+            VirtualKeyBoard,
+            title="Enter EXACTLY 16 character BISS Key (0-9,A-F):",
+            text=""
+        )
 
     def keyboard_callback(self, key):
         if key is None:
@@ -607,8 +683,9 @@ class DCWKeyAddPlugin(Screen):
                 self.show_error("Could not get SID/VPID")
                 return
 
-            sid_part = "{:04X}".format(sid)
-            vpid_part = "{:04X}".format(vpid)
+            sid_part = format_hex4(sid)
+            vpid_part = format_hex4(vpid)
+            sid_vpid = "{}{}".format(sid_part, vpid_part)
             biss_line = "F {}{} 00000000 {} ;# {} -({})-{}-{}-{}-{}-{} {}-Added: {} @ {} - By Auto DCW Plugin\n".format(
                 sid_part, vpid_part, key,
                 channel_name,
@@ -622,18 +699,43 @@ class DCWKeyAddPlugin(Screen):
                 current_date,
                 current_time
             )
+            oscam_line = "F {} 00 {} ;# {} -({})-{}-{}-{}-{}-{} {}-Added: {} @ {} - OSCam service format by Auto DCW Plugin\n".format(
+                sid_part,
+                key,
+                channel_name,
+                sat_pos,
+                freq_mhz,
+                polarization,
+                sr_kbps,
+                fec_str,
+                mod_str,
+                system_str,
+                current_date,
+                current_time
+            )
 
-            if self.write_softcam(biss_line):
-                if self.restart_emulator():
-                    self.show_message("BISS key added!\nSID: {}\nVPID: {}".format(sid_part, vpid_part))
-                else:
-                    self.show_warning("Key added but emulator not restarted")
+            mode = (self.pending_softcam_action or {}).get("mode", "replace")
+            self.pending_softcam_action = None
+            if mode == "oscam_add":
+                self.save_manual_biss_key(sid_part, vpid_part, sid_vpid, oscam_line, replace_existing=False)
             else:
-                self.show_error("Failed to write to SoftCam.Key")
+                self.save_manual_biss_key(sid_part, vpid_part, sid_vpid, biss_line, replace_existing=True)
 
         except Exception as e:
             self.show_error("Error processing key: {}".format(str(e)))
             self.log_message("Error in keyboard_callback: {}".format(str(e)))
+
+    def save_manual_biss_key(self, sid_part, vpid_part, sid_vpid, target_line, replace_existing):
+        if self.write_softcam(target_line, sid_vpid=sid_vpid, replace_existing=replace_existing):
+            if self.restart_emulator():
+                if replace_existing:
+                    self.show_message("BISS key replaced!\nSID: {}\nVPID: {}".format(sid_part, vpid_part))
+                else:
+                    self.show_message("Extra OSCam-format key added!\nSID: {}\nVPID: {}".format(sid_part, vpid_part))
+            else:
+                self.show_warning("Key saved but emulator not restarted")
+        else:
+            self.show_error("Failed to write to SoftCam.Key")
 
     def write_dvbapi(self, caid, sid):
         emu_info = self.get_emulator_info()
@@ -687,7 +789,7 @@ class DCWKeyAddPlugin(Screen):
 
             try:
                 sid_int = int(sid, 16) if isinstance(sid, str) and sid else int(sid)
-                sid_hex = "{:04X}".format(sid_int)
+                sid_hex = format_hex4(sid_int)
             except:
                 sid_hex = sid
 
@@ -710,7 +812,7 @@ class DCWKeyAddPlugin(Screen):
             else:
                 try:
                     caid_int = int(caid, 16) if isinstance(caid, str) and caid else int(caid)
-                    caid_hex = "{:04X}".format(caid_int)
+                    caid_hex = format_hex4(caid_int)
                 except:
                     caid_hex = caid
                 
@@ -770,59 +872,143 @@ class DCWKeyAddPlugin(Screen):
             self.log_message("[ERROR] write_dvbapi: {}".format(str(e)))
             return False
 
-    def write_softcam(self, line):
+    def get_softcam_path(self):
         emu_info = self.get_emulator_info()
         if not emu_info:
-            return False
+            return None
 
         config_dir = emu_info.get('config_dir', "/etc/tuxbox/config/")
-        path = os.path.join(config_dir, "SoftCam.Key")
+        return os.path.join(config_dir, "SoftCam.Key")
+
+    def find_existing_biss_entries(self, sid_part, vpid_part):
+        path = self.get_softcam_path()
+        if not path or not os.path.exists(path):
+            return []
+
+        sid_vpid = "{}{}".format(sid_part, vpid_part).upper()
+        sid_hex = sid_part.upper()
+        matches = []
 
         try:
-            sid_vpid = line.split()[1]
-
-            updated = False
-            new_content = []
-            needs_newline = False
-
-            if os.path.exists(path):
-                if PY3:
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.readlines()
-                else:
-                    with open(path, "r") as f:
-                        content = f.readlines()
-                        
-                needs_newline = not content[-1].endswith('\n') if content else False
-
-                for l in content:
-                    if l.strip().startswith("F") and sid_vpid in l:
-                        updated = True
-                        continue
-                    if l.strip():
-                        new_content.append(l.rstrip() + "\n")
-
-            if updated:
-                self.log_message("Updating existing key for SID/VPID: {}".format(sid_vpid))
-            else:
-                self.log_message("Adding new key for SID/VPID: {}".format(sid_vpid))
-
-            if needs_newline:
-                new_content.append("\n")
-            new_content.append(line.rstrip() + "\n")
-
             if PY3:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.writelines(new_content)
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = f.readlines()
             else:
-                with open(path, "w") as f:
-                    f.writelines(new_content)
+                with open(path, "r") as f:
+                    lines = f.readlines()
+
+            for raw_line in lines:
+                clean_line = raw_line.strip()
+                if not clean_line or not clean_line.startswith("F"):
+                    continue
+
+                data_part = clean_line.split(";", 1)[0].strip()
+                parts = data_part.split()
+                if len(parts) < 2:
+                    continue
+
+                service_token = parts[1].upper()
+                if service_token == sid_vpid or service_token == sid_hex or service_token.startswith("{}:".format(sid_hex)):
+                    matches.append(clean_line)
+        except Exception as e:
+            self.log_message("[ERROR] find_existing_biss_entries: {}".format(str(e)))
+
+        return matches
+
+    def extract_biss_key(self, line):
+        try:
+            data_part = line.split(";", 1)[0].strip()
+            parts = data_part.split()
+            if len(parts) >= 4:
+                return parts[3].upper()
+        except Exception:
+            pass
+        return None
+
+    def write_softcam(self, line, sid_vpid=None, replace_existing=True):
+        path = self.get_softcam_path()
+        if not path:
+            return False
+
+        new_content = []
+        updated = False
+        needs_newline = False
+
+        try:
+            sid_vpid = self.normalize_sid_vpid(sid_vpid, line)
+            content = self.read_text_lines(path)
+            new_content, updated, needs_newline = self.build_softcam_content(
+                content, sid_vpid, line, replace_existing
+            )
+            self.log_softcam_action(updated, replace_existing, sid_vpid)
+            self.write_text_lines(path, new_content)
 
             return True
 
         except Exception as e:
             self.log_message("[ERROR] write_softcam: {}".format(str(e)))
             return False
+
+    def normalize_sid_vpid(self, sid_vpid, line):
+        if not sid_vpid:
+            sid_vpid = line.split()[1]
+        return sid_vpid.upper()
+
+    def read_text_lines(self, path):
+        if not os.path.exists(path):
+            return []
+
+        if PY3:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.readlines()
+        with open(path, "r") as f:
+            return f.readlines()
+
+    def build_softcam_content(self, content, sid_vpid, line, replace_existing):
+        updated = False
+        new_content = []
+        needs_newline = bool(content and not content[-1].endswith('\n'))
+
+        for existing_line in content:
+            prepared_line, removed = self.prepare_softcam_line(existing_line, sid_vpid, replace_existing)
+            if removed:
+                updated = True
+                continue
+            if prepared_line:
+                new_content.append(prepared_line)
+
+        if needs_newline:
+            new_content.append("\n")
+        new_content.append(line.rstrip() + "\n")
+        return new_content, updated, needs_newline
+
+    def prepare_softcam_line(self, existing_line, sid_vpid, replace_existing):
+        stripped = existing_line.strip()
+        if not stripped:
+            return None, False
+
+        if replace_existing and stripped.startswith("F") and sid_vpid in stripped.upper():
+            return None, True
+
+        return existing_line.rstrip() + "\n", False
+
+    def log_softcam_action(self, updated, replace_existing, sid_vpid):
+        if updated:
+            self.log_message("Updating existing key for SID/VPID: {}".format(sid_vpid))
+            return
+
+        if replace_existing:
+            self.log_message("Adding new key for SID/VPID: {}".format(sid_vpid))
+        else:
+            self.log_message("Adding additional OSCam-format key for SID/VPID: {}".format(sid_vpid))
+
+    def write_text_lines(self, path, lines):
+        if PY3:
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        else:
+            with open(path, "w") as f:
+                f.writelines(lines)
 
     def find_config(self, filename):
         keywords = ['oscam', 'ncam']

@@ -1,6 +1,6 @@
 #############################################################################
 #  Add Auto DCW Key And ADD Manual BISS Key Plugin for Enigma2 by @Youchie ##
-#  Version: 1.0.8                                                          ##
+#  Version: 1.0.9                                                          ##
 #  Coded by @Youchie SmartCam Tem (c)2025                                  ##
 #  Telegram ID: @Youchie                                                   ##
 #  Telegram Channel: https://t.me/smartcam_team                            ##
@@ -105,7 +105,7 @@ try:
 except ImportError:
     ZIP_SUPPORT = False
 
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 GITHUB_REPO = "smcam/Auto-DCW-Key-ADD"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
