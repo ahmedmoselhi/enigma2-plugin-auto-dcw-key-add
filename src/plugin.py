@@ -513,6 +513,22 @@ class DCWKeyAddPlugin(Screen):
 
     def manual_add(self):
         try:
+            service = self.session.nav.getCurrentService()
+            info = service and service.info()
+            if info:
+                sid = info.getInfo(iServiceInformation.sSID)
+                vpid = info.getInfo(iServiceInformation.sVideoPID)
+                if sid not in [None, -1] and vpid not in [None, -1]:
+                    sid_part = "{:04X}".format(sid)
+                    vpid_part = "{:04X}".format(vpid)
+                    existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
+                    if existing_keys:
+                        current_key = self.extract_biss_key(existing_keys[0])
+                        if current_key:
+                            self.log_message("Current BISS key for SID {} VPID {}: {}".format(sid_part, vpid_part, current_key))
+                        else:
+                            self.log_message("Current BISS entry for SID {} VPID {}: {}".format(sid_part, vpid_part, existing_keys[0]))
+
             self.session.openWithCallback(self.keyboard_callback,
                 VirtualKeyBoard,
                 title="Enter EXACTLY 16 character BISS Key (0-9,A-F):",
@@ -641,20 +657,25 @@ class DCWKeyAddPlugin(Screen):
 
             existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
             if existing_keys:
+                current_key = self.extract_biss_key(existing_keys[0])
                 self.pending_softcam_action = {
                     "sid_part": sid_part,
                     "vpid_part": vpid_part,
                     "sid_vpid": sid_vpid,
                     "biss_line": biss_line,
-                    "oscam_line": oscam_line
+                    "oscam_line": oscam_line,
+                    "current_key": current_key
                 }
                 self.log_message("Existing BISS key found for service SID {} VPID {}".format(sid_part, vpid_part))
+                if current_key:
+                    self.log_message("Current service key: {}".format(current_key))
                 self.session.openWithCallback(
                     self.on_existing_biss_choice,
                     MessageBox,
                     "An existing BISS key was found for current service.\n\n"
-                    "Yes = Replace existing key with current BISS key\n"
-                    "No = Add another key in OSCam format for this service",
+                    "Current key: {}\n\n"
+                    "Yes = Update current key\n"
+                    "No = Add new key with OSCam service ID format".format(current_key or "Unknown"),
                     type=MessageBox.TYPE_YESNO,
                     default=True
                 )
@@ -879,6 +900,16 @@ class DCWKeyAddPlugin(Screen):
             self.log_message("[ERROR] find_existing_biss_entries: {}".format(str(e)))
 
         return matches
+
+    def extract_biss_key(self, line):
+        try:
+            data_part = line.split(";", 1)[0].strip()
+            parts = data_part.split()
+            if len(parts) >= 4:
+                return parts[3].upper()
+        except Exception:
+            pass
+        return None
 
     def write_softcam(self, line, sid_vpid=None, replace_existing=True):
         path = self.get_softcam_path()
