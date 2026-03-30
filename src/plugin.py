@@ -930,6 +930,10 @@ class DCWKeyAddPlugin(Screen):
         if not path:
             return False
 
+        new_content = []
+        updated = False
+        needs_newline = False
+
         try:
             sid_vpid = self.normalize_sid_vpid(sid_vpid, line)
             content = self.read_text_lines(path)
