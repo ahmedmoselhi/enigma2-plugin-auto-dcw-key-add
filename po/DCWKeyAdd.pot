@@ -1,0 +1,119 @@
+# Translation file for DCWKeyAdd Plugin.
+# Copyright (C) 2025 SmartCam Team
+# This file is distributed under the same license as the DCWKeyAdd package.
+# @Youchie <https://t.me/smartcam_team>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0.8\n"
+"POT-Creation-Date: 2026-03-30 13:41+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Add BISS Key And Auto ADD MAP CAID To DVBAPI"
+msgstr ""
+
+msgid "Select Key Addition Method:"
+msgstr ""
+
+msgid "Auto (DVBAPI)"
+msgstr ""
+
+msgid "Manual (BISS)"
+msgstr ""
+
+msgid "Exit"
+msgstr ""
+
+msgid "Check Update"
+msgstr ""
+
+msgid "Press GREEN Key For Auto (DVBAPI): Only use this if the CW doesn't change (Freeze CW)"
+msgstr ""
+
+msgid "Press YELLOW Key For ADD Manual BISS Key"
+msgstr ""
+
+msgid "Press BLUE Key To Check Update"
+msgstr ""
+
+msgid "Press RED Key To Exit Plugin"
+msgstr ""
+
+msgid "SNR"
+msgstr ""
+
+msgid "AGC"
+msgstr ""
+
+msgid "Freq: %s | Pol: %s | FEC: %s | SR: %s"
+msgstr ""
+
+msgid "Channel info not available"
+msgstr ""
+
+msgid "Update already installed!\nPlease Restart Enigma2 to Complete Update."
+msgstr ""
+
+msgid "New update available"
+msgstr ""
+
+msgid "No updates available"
+msgstr ""
+
+msgid "Checking channel encryption..."
+msgstr ""
+
+msgid "No active service!\nPlease tune to a channel first."
+msgstr ""
+
+msgid "Could not get service info"
+msgstr ""
+
+msgid "Channel is not encrypted\nor CAID not available"
+msgstr ""
+
+msgid "Could not get SID"
+msgstr ""
+
+msgid "Found encrypted channel\nCAID: %s\nSID: %s"
+msgstr ""
+
+msgid "Key added successfully!\nCAID: %s\nSID: %s"
+msgstr ""
+
+msgid "Key added but emulator not restarted"
+msgstr ""
+
+msgid "Failed to write to dvbapi file"
+msgstr ""
+
+msgid "Enter EXACTLY 16 character BISS Key (0-9,A-F):"
+msgstr ""
+
+msgid "Key is too short! (%s/16 chars)\nNeed %s more characters."
+msgstr ""
+
+msgid "Key is too long! (%s/16 chars)\nRemove %s characters."
+msgstr ""
+
+msgid "Invalid characters!\nOnly 0-9 and A-F are allowed."
+msgstr ""
+
+msgid "Processing BISS key..."
+msgstr ""
+
+msgid "BISS key added!\nSID: %s\nVPID: %s"
+msgstr ""
+
+msgid "Failed to write to SoftCam.Key"
+msgstr ""
+
+msgid "Required packages not installed!\nPlease install manually:\n"
+msgstr ""
