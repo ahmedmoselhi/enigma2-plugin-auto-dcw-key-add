@@ -1,0 +1,9 @@
+Package: enigma2-plugin-extensions-auto-dcw-key-add
+Version:
+Description: Add Auto DCW Key And ADD Manual BISS Key Plugin for Enigma2
+Section: base
+Priority: optional
+Architecture: all
+License: unknown
+OE: openPLi
+Maintainer: Youchie /ahmedmoselhi <ahmedmoselhi55@gmail.com>
