@@ -60,6 +60,11 @@ GITHUB_REPO = "smcam/Auto-DCW-Key-ADD"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
 VERSION_FILE = os.path.join(INSTALL_PATH, "version.txt")
+HEX4_FORMAT = "{:04X}"
+
+
+def format_hex4(value):
+    return HEX4_FORMAT.format(value)
 
 class DCWKeyAddPlugin(Screen):
     def getSkin(self):
@@ -321,8 +326,8 @@ class DCWKeyAddPlugin(Screen):
             if sid in [None, -1] or vpid in [None, -1]:
                 return
 
-            sid_part = "{:04X}".format(sid)
-            vpid_part = "{:04X}".format(vpid)
+            sid_part = format_hex4(sid)
+            vpid_part = format_hex4(vpid)
             existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
             if not existing_keys:
                 return
@@ -520,8 +525,8 @@ class DCWKeyAddPlugin(Screen):
                 self.show_error("Could not get SID")
                 return
 
-            caid = "{:04X}".format(caids[0])
-            sid = "{:04X}".format(sid)
+            caid = format_hex4(caids[0])
+            sid = format_hex4(sid)
 
             self["label"].setText("Found encrypted channel\nCAID: {}\nSID: {}".format(caid, sid))
             self.log_message("Found encrypted channel\nCAID: {}\nSID: {}".format(caid, sid))
@@ -547,8 +552,8 @@ class DCWKeyAddPlugin(Screen):
                 sid = info.getInfo(iServiceInformation.sSID)
                 vpid = info.getInfo(iServiceInformation.sVideoPID)
                 if sid not in [None, -1] and vpid not in [None, -1]:
-                    sid_part = "{:04X}".format(sid)
-                    vpid_part = "{:04X}".format(vpid)
+                    sid_part = format_hex4(sid)
+                    vpid_part = format_hex4(vpid)
                     channel_name = info.getName()
                     existing_keys = self.find_existing_biss_entries(sid_part, vpid_part)
                     if existing_keys:
@@ -678,8 +683,8 @@ class DCWKeyAddPlugin(Screen):
                 self.show_error("Could not get SID/VPID")
                 return
 
-            sid_part = "{:04X}".format(sid)
-            vpid_part = "{:04X}".format(vpid)
+            sid_part = format_hex4(sid)
+            vpid_part = format_hex4(vpid)
             sid_vpid = "{}{}".format(sid_part, vpid_part)
             biss_line = "F {}{} 00000000 {} ;# {} -({})-{}-{}-{}-{}-{} {}-Added: {} @ {} - By Auto DCW Plugin\n".format(
                 sid_part, vpid_part, key,
@@ -784,7 +789,7 @@ class DCWKeyAddPlugin(Screen):
 
             try:
                 sid_int = int(sid, 16) if isinstance(sid, str) and sid else int(sid)
-                sid_hex = "{:04X}".format(sid_int)
+                sid_hex = format_hex4(sid_int)
             except:
                 sid_hex = sid
 
@@ -807,7 +812,7 @@ class DCWKeyAddPlugin(Screen):
             else:
                 try:
                     caid_int = int(caid, 16) if isinstance(caid, str) and caid else int(caid)
-                    caid_hex = "{:04X}".format(caid_int)
+                    caid_hex = format_hex4(caid_int)
                 except:
                     caid_hex = caid
                 
@@ -926,57 +931,80 @@ class DCWKeyAddPlugin(Screen):
             return False
 
         try:
-            if not sid_vpid:
-                sid_vpid = line.split()[1]
-            sid_vpid = sid_vpid.upper()
-
-            updated = False
-            new_content = []
-            needs_newline = False
-
-            if os.path.exists(path):
-                if PY3:
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.readlines()
-                else:
-                    with open(path, "r") as f:
-                        content = f.readlines()
-                        
-                needs_newline = not content[-1].endswith('\n') if content else False
-
-                for l in content:
-                    stripped = l.strip()
-                    if not stripped:
-                        continue
-                    if replace_existing and stripped.startswith("F") and sid_vpid in stripped.upper():
-                        updated = True
-                        continue
-                    new_content.append(l.rstrip() + "\n")
-
-            if updated:
-                self.log_message("Updating existing key for SID/VPID: {}".format(sid_vpid))
-            else:
-                if replace_existing:
-                    self.log_message("Adding new key for SID/VPID: {}".format(sid_vpid))
-                else:
-                    self.log_message("Adding additional OSCam-format key for SID/VPID: {}".format(sid_vpid))
-
-            if needs_newline:
-                new_content.append("\n")
-            new_content.append(line.rstrip() + "\n")
-
-            if PY3:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.writelines(new_content)
-            else:
-                with open(path, "w") as f:
-                    f.writelines(new_content)
+            sid_vpid = self.normalize_sid_vpid(sid_vpid, line)
+            content = self.read_text_lines(path)
+            new_content, updated, needs_newline = self.build_softcam_content(
+                content, sid_vpid, line, replace_existing
+            )
+            self.log_softcam_action(updated, replace_existing, sid_vpid)
+            self.write_text_lines(path, new_content)
 
             return True
 
         except Exception as e:
             self.log_message("[ERROR] write_softcam: {}".format(str(e)))
             return False
+
+    def normalize_sid_vpid(self, sid_vpid, line):
+        if not sid_vpid:
+            sid_vpid = line.split()[1]
+        return sid_vpid.upper()
+
+    def read_text_lines(self, path):
+        if not os.path.exists(path):
+            return []
+
+        if PY3:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.readlines()
+        with open(path, "r") as f:
+            return f.readlines()
+
+    def build_softcam_content(self, content, sid_vpid, line, replace_existing):
+        updated = False
+        new_content = []
+        needs_newline = bool(content and not content[-1].endswith('\n'))
+
+        for existing_line in content:
+            prepared_line, removed = self.prepare_softcam_line(existing_line, sid_vpid, replace_existing)
+            if removed:
+                updated = True
+                continue
+            if prepared_line:
+                new_content.append(prepared_line)
+
+        if needs_newline:
+            new_content.append("\n")
+        new_content.append(line.rstrip() + "\n")
+        return new_content, updated, needs_newline
+
+    def prepare_softcam_line(self, existing_line, sid_vpid, replace_existing):
+        stripped = existing_line.strip()
+        if not stripped:
+            return None, False
+
+        if replace_existing and stripped.startswith("F") and sid_vpid in stripped.upper():
+            return None, True
+
+        return existing_line.rstrip() + "\n", False
+
+    def log_softcam_action(self, updated, replace_existing, sid_vpid):
+        if updated:
+            self.log_message("Updating existing key for SID/VPID: {}".format(sid_vpid))
+            return
+
+        if replace_existing:
+            self.log_message("Adding new key for SID/VPID: {}".format(sid_vpid))
+        else:
+            self.log_message("Adding additional OSCam-format key for SID/VPID: {}".format(sid_vpid))
+
+    def write_text_lines(self, path, lines):
+        if PY3:
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        else:
+            with open(path, "w") as f:
+                f.writelines(lines)
 
     def find_config(self, filename):
         keywords = ['oscam', 'ncam']
