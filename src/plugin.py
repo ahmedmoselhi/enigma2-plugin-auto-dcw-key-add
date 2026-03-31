@@ -56,7 +56,7 @@ except ImportError:
     ZIP_SUPPORT = False
 
 VERSION = "1.0.9"
-GITHUB_REPO = "smcam/Auto-DCW-Key-ADD"
+GITHUB_REPO = "ahmedmoselhi/enigma2-plugin-auto-dcw-key-add"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
 VERSION_FILE = os.path.join(INSTALL_PATH, "version.txt")
