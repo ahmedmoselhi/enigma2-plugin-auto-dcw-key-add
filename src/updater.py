@@ -1,6 +1,6 @@
 #############################################################################
 #  Add Auto DCW Key And ADD Manual BISS Key Plugin for Enigma2 by @Youchie ##
-#  Version: 1.0.9                                                          ##
+#  Version: 1.1.0                                                          ##
 #  Coded by @Youchie SmartCam Tem (c)2025                                  ##
 #  Telegram ID: @Youchie                                                   ##
 #  Telegram Channel: https://t.me/smartcam_team                            ##
@@ -105,7 +105,7 @@ try:
 except ImportError:
     ZIP_SUPPORT = False
 
-VERSION = "1.0.9"
+VERSION = "1.1.0"
 GITHUB_REPO = "ahmedmoselhi/enigma2-plugin-auto-dcw-key-add"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
@@ -682,26 +682,60 @@ class UpdateManager:
                 )
                 return False
 
+            # Retrieve local version from version.txt to bypass out of sync hardcoded variables
+            current_version = VERSION
+            if os.path.exists(VERSION_FILE):
+                try:
+                    with open(VERSION_FILE, 'r') as f:
+                        content = f.read().strip()
+                        if content:
+                            current_version = content
+                except:
+                    pass
+
+            # Primary: Verify against true remote version.txt 
+            latest_version = None
+            try:
+                version_url = "https://raw.githubusercontent.com/{}/refs/heads/main/src/version.txt".format(GITHUB_REPO)
+                req_v = Request(version_url)
+                req_v.add_header('User-Agent', 'Enigma2-Plugin-Updater')
+                resp_v = urlopen(req_v, timeout=10)
+                if PY3:
+                    latest_version = resp_v.read().decode('utf-8').strip()
+                else:
+                    latest_version = resp_v.read().strip()
+            except Exception:
+                pass
+
+            # Secondary: Fetch GitHub API strictly for changelog rendering 
             url = "https://api.github.com/repos/{}/releases/latest".format(GITHUB_REPO)
             req = Request(url)
             req.add_header('Accept', 'application/vnd.github.v3+json')
             req.add_header('User-Agent', 'Enigma2-Plugin-Updater')
-
-            response = urlopen(req, timeout=10)
-        
-            if PY3:
-                data = json.loads(response.read().decode('utf-8'))
-            else:
-                data = json.loads(response.read())
-
-            latest_version = data.get('tag_name', '').replace('v', '')
+            
+            data = {}
+            try:
+                response = urlopen(req, timeout=10)
+                if PY3:
+                    data = json.loads(response.read().decode('utf-8'))
+                else:
+                    data = json.loads(response.read())
+            except Exception:
+                pass
 
             if not latest_version:
-                raise ValueError("Invalid version format")
+                latest_version = data.get('tag_name', '').replace('v', '')
 
-            if latest_version == VERSION:
+            if not latest_version:
+                raise ValueError("Invalid version format or unable to fetch version.")
+
+            # Ensure all trailing whitespace & carriage returns are cleansed prior to comparison
+            latest_clean = latest_version.replace('v', '').strip()
+            current_clean = current_version.replace('v', '').strip()
+
+            if latest_clean == current_clean:
                 if manual_check:
-                    msg = "You already have the latest version (v{})".format(VERSION)
+                    msg = "You already have the latest version (v{})".format(current_clean)
                     session.open(
                         MessageBox,
                         msg,
@@ -710,13 +744,13 @@ class UpdateManager:
                     )
                 return False
             else:
-                changelog = data.get('body', 'No changelog available')
+                changelog = data.get('body', 'Performance improvements and bug fixes.')
                 message = (
                     "New version v{} available!\n"
                     "Current version: v{}\n\n"
                     "Changes:\n{}\n\n"
                     "Would you like to update now?"
-                ).format(latest_version, VERSION, changelog)
+                ).format(latest_clean, current_clean, changelog)
                 
                 session.openWithCallback(
                     lambda answer: UpdateManager.start_update(session, data) if answer else None,
@@ -750,13 +784,15 @@ class UpdateManager:
                 return
 
             download_url = None
-            for asset in release_data.get('assets', []):
-                if asset['name'].endswith('.zip'):
-                    download_url = asset['browser_download_url']
-                    break
+            if release_data:
+                for asset in release_data.get('assets', []):
+                    if asset['name'].endswith('.zip'):
+                        download_url = asset['browser_download_url']
+                        break
 
+            # Automatically fallback to main branch zip if Release API was uncontactable or empty
             if not download_url:
-                raise Exception("No ZIP package found")
+                download_url = "https://github.com/{}/archive/refs/heads/main.zip".format(GITHUB_REPO)
 
             package_path = "/tmp/{}_update_{}.zip".format(PLUGIN_NAME, int(time.time()))
 

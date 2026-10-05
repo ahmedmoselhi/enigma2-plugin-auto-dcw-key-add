@@ -1,6 +1,6 @@
 #############################################################################
 #  Add Auto DCW Key And ADD Manual BISS Key Plugin for Enigma2 by @Youchie ##
-#  Version: 1.0.9                                                          ##
+#  Version: 1.1.0                                                          ##
 #  Coded by @Youchie SmartCam Tem (c)2025                                  ##
 #  Telegram ID: @Youchie                                                   ##
 #  Telegram Channel: https://t.me/smartcam_team                            ##
@@ -55,7 +55,7 @@ try:
 except ImportError:
     ZIP_SUPPORT = False
 
-VERSION = "1.0.9"
+VERSION = "1.1.0"
 GITHUB_REPO = "ahmedmoselhi/enigma2-plugin-auto-dcw-key-add"
 PLUGIN_NAME = "DCWKeyAdd"
 INSTALL_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd"
@@ -130,7 +130,7 @@ class DCWKeyAddPlugin(Screen):
                     <widget name="hint_auto" position="0,484" size="599,22" font="Regular;13" halign="center" backgroundColor="#000000" valign="center" transparent="1" foregroundColor="#008000" />
                     <widget name="hint_exit" position="0,508" size="599,22" font="Regular;13" halign="center" backgroundColor="#000000" valign="center" transparent="1" foregroundColor="#ff0000" />
                     <widget name="hint_update" position="0,435" size="599,22" font="Regular;13" halign="center" backgroundColor="#000000" valign="center" transparent="1" foregroundColor="#0000ff" />
-                    <widget source="session.Title" render="Label" text="SNR" position="1.0.90" size="40,18" font="Regular;14" backgroundColor="#08050505" transparent="1" zPosition="2" halign="left" foregroundColor="#ff3737" />
+                    <widget source="session.Title" render="Label" text="SNR" position="1.1.00" size="40,18" font="Regular;14" backgroundColor="#08050505" transparent="1" zPosition="2" halign="left" foregroundColor="#ff3737" />
                     <widget source="session.Title" render="Label" text="AGC" position="150,60" size="40,18" font="Regular;14" backgroundColor="#08050505" transparent="1" zPosition="2" halign="left" foregroundColor="#ff3737" />
                     <widget source="session.FrontendStatus" render="Progress" position="190,67" size="220,6" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd/frontend/agc.png" zPosition="3" transparent="1">
                         <convert type="FrontendInfo">AGC</convert>
@@ -138,7 +138,7 @@ class DCWKeyAddPlugin(Screen):
                     <widget source="session.FrontendStatus" render="Label" position="420,60" size="60,18" backgroundColor="#000000" transparent="1" zPosition="2" foregroundColor="#00d1d1d1" font="Regular;16" halign="left">
                         <convert type="FrontendInfo">AGC</convert>
                     </widget>
-                    <widget source="session.FrontendStatus" render="Progress" position="1.0.97" size="220,6" zPosition="3" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd/frontend/snron.png" transparent="1">
+                    <widget source="session.FrontendStatus" render="Progress" position="1.1.07" size="220,6" zPosition="3" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DCWKeyAdd/frontend/snron.png" transparent="1">
                         <convert type="FrontendInfo">SNR</convert>
                     </widget>
                     <widget source="session.FrontendStatus" render="Label" position="420,80" size="60,18" backgroundColor="#000000" transparent="1" zPosition="2" font="Regular;16" halign="left" foregroundColor="#00d1d1d1" valign="center">
@@ -220,6 +220,48 @@ class DCWKeyAddPlugin(Screen):
        
     def layoutFinished(self):
         self["DCW_Key"].show()
+
+    def get_service_sid(self, info):
+        try:
+            sid = info.getInfo(iServiceInformation.sSID)
+            if sid not in [None, -1, 0]:
+                return sid
+        except Exception:
+            pass
+
+        try:
+            ref_str = ""
+            if hasattr(info, "getInfoString"):
+                ref_str = info.getInfoString(iServiceInformation.sServiceref)
+            if not ref_str and hasattr(self.session, "nav"):
+                curr_ref = self.session.nav.getCurrentlyPlayingServiceReference()
+                if curr_ref:
+                    ref_str = curr_ref.toString()
+            if ref_str:
+                parts = ref_str.split(":")
+                if len(parts) >= 4 and parts[3]:
+                    return int(parts[3], 16)
+        except Exception as e:
+            self.log_message("Error parsing SID from service reference: {}".format(str(e)))
+
+        return None
+
+    def get_service_vpid(self, info):
+        try:
+            vpid = info.getInfo(iServiceInformation.sVideoPID)
+            if vpid not in [None, -1]:
+                return vpid
+        except Exception:
+            pass
+
+        try:
+            apid = info.getInfo(iServiceInformation.sAudioPID)
+            if apid not in [None, -1]:
+                return apid
+        except Exception:
+            pass
+
+        return 0
 
     def get_satellite_position(self):
         try:
@@ -321,9 +363,9 @@ class DCWKeyAddPlugin(Screen):
 
     def log_current_service_biss_key(self, info, channel_name):
         try:
-            sid = info.getInfo(iServiceInformation.sSID)
-            vpid = info.getInfo(iServiceInformation.sVideoPID)
-            if sid in [None, -1] or vpid in [None, -1]:
+            sid = self.get_service_sid(info)
+            vpid = self.get_service_vpid(info)
+            if sid is None or vpid is None:
                 return
 
             sid_part = format_hex4(sid)
@@ -520,8 +562,8 @@ class DCWKeyAddPlugin(Screen):
                     return
                 caids = [caid]
 
-            sid = info.getInfo(iServiceInformation.sSID)
-            if sid in [None, -1]:
+            sid = self.get_service_sid(info)
+            if sid is None:
                 self.show_error("Could not get SID")
                 return
 
@@ -549,9 +591,9 @@ class DCWKeyAddPlugin(Screen):
             info = service and service.info()
             self.pending_softcam_action = {"mode": "replace"}
             if info:
-                sid = info.getInfo(iServiceInformation.sSID)
-                vpid = info.getInfo(iServiceInformation.sVideoPID)
-                if sid not in [None, -1] and vpid not in [None, -1]:
+                sid = self.get_service_sid(info)
+                vpid = self.get_service_vpid(info)
+                if sid is not None and vpid is not None:
                     sid_part = format_hex4(sid)
                     vpid_part = format_hex4(vpid)
                     channel_name = info.getName()
@@ -639,14 +681,17 @@ class DCWKeyAddPlugin(Screen):
                 self.show_error("Could not get service info")
                 return
 
-            sid = info.getInfo(iServiceInformation.sSID)
-            vpid = info.getInfo(iServiceInformation.sVideoPID)
+            sid = self.get_service_sid(info)
+            vpid = self.get_service_vpid(info)
             channel_name = info.getName().replace(" ", "_")
             current_date = time.strftime("%Y-%m-%d")
             current_time = time.strftime("%H:%M")
             
-            feinfo = service.frontendInfo()
-            frontendData = feinfo.getAll(True)
+            feinfo = service.frontendInfo() if service else None
+            frontendData = feinfo.getAll(True) if feinfo else {}
+            if not isinstance(frontendData, dict):
+                frontendData = {}
+
             orbital_position = frontendData.get("orbital_position", 0)
             if orbital_position > 1800:
                 orbital_position = 3600 - orbital_position
@@ -679,7 +724,7 @@ class DCWKeyAddPlugin(Screen):
             system = frontendData.get("system", 0)
             system_str = "DVB-S2" if system == 1 else "DVB-S"
 
-            if sid in [None, -1] or vpid in [None, -1]:
+            if sid is None or vpid is None:
                 self.show_error("Could not get SID/VPID")
                 return
 
@@ -753,8 +798,11 @@ class DCWKeyAddPlugin(Screen):
             current_date = time.strftime("%Y-%m-%d")
             current_time = time.strftime("%H:%M")
             
-            feinfo = service.frontendInfo()
-            frontendData = feinfo.getAll(True)
+            feinfo = service.frontendInfo() if service else None
+            frontendData = feinfo.getAll(True) if feinfo else {}
+            if not isinstance(frontendData, dict):
+                frontendData = {}
+
             orbital_position = frontendData.get("orbital_position", 0)
             if orbital_position > 1800:
                 orbital_position = 3600 - orbital_position
@@ -1052,13 +1100,13 @@ class DCWKeyAddPlugin(Screen):
         return None
 
     def show_message(self, msg):
-        MessageBox(self.session, msg, MessageBox.TYPE_INFO, timeout=5).show()
+        self.session.open(MessageBox, msg, MessageBox.TYPE_INFO, timeout=5)
 
     def show_error(self, msg):
-        MessageBox(self.session, msg, MessageBox.TYPE_ERROR, timeout=5).show()
+        self.session.open(MessageBox, msg, MessageBox.TYPE_ERROR, timeout=5)
 
     def show_warning(self, msg):
-        MessageBox(self.session, msg, MessageBox.TYPE_WARNING, timeout=5).show()
+        self.session.open(MessageBox, msg, MessageBox.TYPE_WARNING, timeout=5)
 
 def check_python_version():
     if sys.version_info[0] == 2 and sys.version_info[1] < 7:
